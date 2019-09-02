@@ -29,13 +29,14 @@ def get_air_density_from_altitude(altitude_m):
         pressure_kpa    = 22.65 * math.pow( math.e, 1.73 - (0.000157 * altitude_m) )
     
     # Troposhere Equation
-    elif(altitude_m > 0):
+    elif(altitude_m >= 0):
         temperature_c   = 15.04 - (0.00649 * altitude_m)
         pressure_kpa    = 101.29 * math.pow( (temperature_c + 273.1)/288.08, 5.256)
 
     #Fault Handling
     else:
-        raise   ValueError("Altitude cannot be negative")
+        # Just set the altitude to zero, re run and return that
+        return get_air_density_from_altitude(0)
 
     #Calculate density from temperature and pressure
     density_kg_p_m3     = pressure_kpa / (0.2869 * (temperature_c + 273.1))

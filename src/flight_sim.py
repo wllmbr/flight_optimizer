@@ -35,6 +35,13 @@ class Vehicle_State:
 def perform_flight(motor_model, rocket_diameter_in, rocket_mass, drogue_size, main_size, start_altitude, delta_t_s):
 
     flight_model        = []
+
+    # Check to make sure the input parameters make sense
+    if(rocket_diameter_in == 0):
+        return flight_model
+    elif(rocket_mass == 0):
+        return flight_model
+
     current_timestep    = 0
 
     # Add in first Vehicle State
