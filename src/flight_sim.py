@@ -9,9 +9,9 @@
 #
 ###########################################################
 
-import dynamic_models.drag      as drag
-import dynamic_models.engine    as engine
-import static_models.nose_cone  as nose_cone
+import src.dynamic_models.drag      as drag
+import src.dynamic_models.engine    as engine
+import src.static_models.nose_cone  as nose_cone
 
 import math
 import time

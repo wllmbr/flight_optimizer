@@ -1,6 +1,6 @@
-import flight_sim               as flight_sim
-import dynamic_models.engine    as engine
-import grapher.data_input       as data_input
+import src.flight_sim               as flight_sim
+import src.dynamic_models.engine    as engine
+import src.grapher.data_input       as data_input
 import time
 from PyQt5 import QtGui
 from PyQt5.QtCore import Qt
