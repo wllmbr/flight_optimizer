@@ -9,10 +9,19 @@ import pyqtgraph as pg
 import time
 import threading
 import os
+import io
+import sys
+
+# Surpress STDOUT
+
+dev_null = io.StringIO()
+sys.stdout = dev_null
+sys.stderr = dev_null
 
 app = QtGui.QApplication([])
 
 window = QtGui.QWidget()
+window.setWindowTitle("Flight Designer")
 
 ## Create some widgets to be placed inside
 plot            = pg.PlotWidget()
@@ -134,7 +143,7 @@ def display_slider(il):
 
                     #Find Apogee
                     if alt > apogee:
-                        apogee = entry.altitude
+                        apogee = alt
                     # Add point to plot
                     x_vals.append(entry.time_stamp)
                     y_vals.append(alt)

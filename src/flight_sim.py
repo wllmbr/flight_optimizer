@@ -15,6 +15,7 @@ import static_models.nose_cone  as nose_cone
 
 import math
 import time
+import numpy
 
 class Vehicle_State:
 
@@ -42,7 +43,6 @@ def perform_flight(motor_model, rocket_diameter_in, rocket_mass, drogue_size, ma
 
     # Only give the sim a little bit of time to run
     sim_start_time      = time.time()
-
     flight_model        = []
 
     # Check to make sure the input parameters make sense
@@ -66,35 +66,61 @@ def perform_flight(motor_model, rocket_diameter_in, rocket_mass, drogue_size, ma
     main_diameter_m     = main_size * 0.0254
 
     coefficient_of_drag = nose_cone.get_cd_for_nosecone_type("vonkarman")
-    surface_area        = (rocket_diameter_m / 2.0 ) * (rocket_diameter_m / 2.0 ) * math.pi
+    rocket_area         = (rocket_diameter_m / 2.0 ) * (rocket_diameter_m / 2.0 ) * math.pi
     drogue_area         = (drogue_diameter_m / 2.0 ) * (drogue_diameter_m / 2.0 ) * math.pi
     main_area           = (main_diameter_m / 2.0 ) * (main_diameter_m / 2.0 ) * math.pi
 
     # print("Rocket Area %f" % surface_area)
 
-    # Perform the boost phase simulation
-    while(current_timestep <= motor_model.burn_time_s):
-
-        if(not(validate_sim_time(sim_start_time))):
-            return None
+    # Run full model
+    current_state = Vehicle_State.Flight_phases["powered_boost"]
+    while(flight_model[-1].altitude >= start_altitude):
 
         #Progress to new timestamp
         current_timestep += delta_t_s
 
-        # Sum all forces
+        # Gather Forces
+        motor_force = 0
+        drag_force = 0
 
-        # Start with motor thrust
-        net_force   = motor_model.get_thrust(current_timestep)
-        # Subtract force due to gravity
-        net_force  -= rocket_mass * 9.8
-        # Subtract drag force
-        net_force  -= drag.calculate_drag_force(coefficient_of_drag,
-                                                flight_model[-1].velocity,
-                                                flight_model[-1].altitude,
-                                                surface_area)
+        # Add in Motor Thrust
+        if(current_state == Vehicle_State.Flight_phases["powered_boost"]):
+            motor_force = motor_model.get_thrust(current_timestep)
+        else:
+            motor_force = 0
+
+        # Get Drag force
+        if((current_state == Vehicle_State.Flight_phases["powered_boost"]) or (current_state == Vehicle_State.Flight_phases["coast"])):
+            # If we're powered or coast only the drag of the vehicle is applied
+            drag_force = drag.calculate_drag_force(coefficient_of_drag,
+                                                    flight_model[-1].velocity,
+                                                    flight_model[-1].altitude,
+                                                    rocket_area)
+
+        if((current_state == Vehicle_State.Flight_phases["drogue_descent"]) or (current_state == Vehicle_State.Flight_phases["main_descent"])):
+            # If we're descending always have the drogue force applied
+            drag_force = drag.calculate_drag_force(coefficient_of_drag,
+                                                    flight_model[-1].velocity,
+                                                    flight_model[-1].altitude,
+                                                    drogue_area)
+
+        if((current_state == Vehicle_State.Flight_phases["main_descent"])):
+            # Add the main to the force of the drogue
+            drag_force += drag.calculate_drag_force(coefficient_of_drag,
+                                                    flight_model[-1].velocity,
+                                                    flight_model[-1].altitude,
+                                                    main_area)
+
+
+        # Drag force is always applied in the opposite direction of velocity
+        drag_direction = numpy.sign(flight_model[-1].velocity) * -1
+
+        net_force = motor_force + (drag_direction *drag_force)
+
+        # Calculate acceleration
+        net_acceleration    = (net_force / rocket_mass) - 9.8
 
         # Estimate new state
-        net_acceleration    = (net_force / rocket_mass)
         net_velocity        = flight_model[-1].velocity + (net_acceleration * delta_t_s)
         net_altitude        = flight_model[-1].altitude + (net_velocity * delta_t_s)
 
@@ -105,123 +131,44 @@ def perform_flight(motor_model, rocket_diameter_in, rocket_mass, drogue_size, ma
         flight_model[-1].acceleration   = net_acceleration
         flight_model[-1].velocity       = net_velocity
         flight_model[-1].altitude       = net_altitude
-        flight_model[-1].phase          = Vehicle_State.Flight_phases["powered_boost"]
+        flight_model[-1].phase          = current_state
 
-    # print("Boost Complete")
+        # Determine Next State
+        if(current_state == Vehicle_State.Flight_phases["powered_boost"]):
+            #Check if the motor is still burning
+            if(current_timestep <= motor_model.burn_time_s):
+                # We're still in boost phase
+                current_state = Vehicle_State.Flight_phases["powered_boost"]
+            else:
+                # Transition to coast phase
+                current_state = Vehicle_State.Flight_phases["coast"]
 
-    # Perform coast phase simulation
-    while(flight_model[-1].velocity >= 0):
+        elif(current_state == Vehicle_State.Flight_phases["coast"]):
+            # Check if we've started descending 
+            if(flight_model[-1].velocity >= 0):
+                # Stay
+                current_state = Vehicle_State.Flight_phases["coast"]
+            else:
+                # Transition to drogue phase
+                current_state = Vehicle_State.Flight_phases["drogue_descent"]
 
-        if(not(validate_sim_time(sim_start_time))):
-            return None
+        elif(current_state == Vehicle_State.Flight_phases["drogue_descent"]):
+            # Check if we're above main deployment
+            if(flight_model[-1].altitude > (228.6+start_altitude)):
+                # Stay
+                current_state = Vehicle_State.Flight_phases["drogue_descent"]
+            else:
+                # Transition to main_descent phase
+                current_state = Vehicle_State.Flight_phases["main_descent"]
 
-        #Progress to new timestamp
-        current_timestep += delta_t_s
-
-        # Sum all forces
-
-        # Start with motor thrust
-        net_force   = 0
-        # Subtract force due to gravity
-        net_force  -= rocket_mass * 9.8
-        # Subtract drag force
-        net_force  -= drag.calculate_drag_force(coefficient_of_drag,
-                                                flight_model[-1].velocity,
-                                                flight_model[-1].altitude,
-                                                surface_area)
-
-        # Estimate new state
-        net_acceleration    = (net_force / rocket_mass)
-        net_velocity        = flight_model[-1].velocity + (net_acceleration * delta_t_s)
-        net_altitude        = flight_model[-1].altitude + (net_velocity * delta_t_s)
-
-        # Make a new state
-        flight_model.append(Vehicle_State(current_timestep))
-        flight_model[-1].acceleration   = net_acceleration
-        flight_model[-1].velocity       = net_velocity
-        flight_model[-1].altitude       = net_altitude
-        flight_model[-1].phase          = Vehicle_State.Flight_phases["coast"]
-        # print("Acceleration: %9.3f\tVelocity %9.3f\tAltitude %9.3f" % (net_acceleration, net_velocity, net_altitude))
-
-
-
-    # print("Coast Complete")
-
-    # Perform drogue phase descent
-    while(flight_model[-1].altitude > (228.6+start_altitude)):
-
-        if(not(validate_sim_time(sim_start_time))):
-            return None
-
-        #Progress to new timestamp
-        current_timestep += delta_t_s
-
-        # Sum all forces
-
-        # Start with motor thrust
-        net_force   = 0
-        # Subtract force due to gravity
-        net_force  -= rocket_mass * 9.8
-        # Subtract drag force
-        net_force  += drag.calculate_drag_force(0.8,
-                                                flight_model[-1].velocity,
-                                                flight_model[-1].altitude,
-                                                drogue_size)
-
-        # Estimate new state
-        net_acceleration    = (net_force / rocket_mass)
-        net_velocity        = flight_model[-1].velocity + (net_acceleration * delta_t_s)
-        net_altitude        = flight_model[-1].altitude + (net_velocity * delta_t_s)
-
-        # Make a new state
-        flight_model.append(Vehicle_State(current_timestep))
-        flight_model[-1].acceleration   = net_acceleration
-        flight_model[-1].velocity       = net_velocity
-        flight_model[-1].altitude       = net_altitude
-        flight_model[-1].phase          = Vehicle_State.Flight_phases["drogue_descent"]
-        # print("Acceleration: %9.3f\tVelocity %9.3f\tAltitude %9.3f" % (net_acceleration, net_velocity, net_altitude))
-
-
-
-    # print("Drogue Complete")
-
-    # Perform main chute phase descent
-    while(flight_model[-1].altitude >= start_altitude):
-
-        if(not(validate_sim_time(sim_start_time))):
-            return None
-
-        #Progress to new timestamp
-        current_timestep += delta_t_s
-
-        # Sum all forces
-
-        # Start with motor thrust
-        net_force   = 0
-        # Subtract force due to gravity
-        net_force  -= rocket_mass * 9.8
-        # Subtract drag force
-        net_force  += drag.calculate_drag_force(0.8,
-                                                flight_model[-1].velocity,
-                                                flight_model[-1].altitude,
-                                                drogue_area)
-        net_force  += drag.calculate_drag_force(0.8,
-                                                flight_model[-1].velocity,
-                                                flight_model[-1].altitude,
-                                                main_area)
-        # Estimate new state
-        net_acceleration    = (net_force / rocket_mass)
-        net_velocity        = flight_model[-1].velocity + (net_acceleration * delta_t_s)
-        net_altitude        = flight_model[-1].altitude + (net_velocity * delta_t_s)
-
-        # Make a new state
-        flight_model.append(Vehicle_State(current_timestep))
-        flight_model[-1].acceleration   = net_acceleration
-        flight_model[-1].velocity       = net_velocity
-        flight_model[-1].altitude       = net_altitude
-        flight_model[-1].phase          = Vehicle_State.Flight_phases["main_descent"]
-        # print("Acceleration: %9.3f\tVelocity %9.3f\tAltitude %9.3f" % (net_acceleration, net_velocity, net_altitude))
-
+        elif(current_state == Vehicle_State.Flight_phases["main_descent"]):
+            #Check if we've hit the ground
+            if(flight_model[-1].altitude >= start_altitude):
+                # Stay
+                current_state = Vehicle_State.Flight_phases["main_descent"]
+            else:
+                # Transition to drogue phase
+                current_state = Vehicle_State.Flight_phases["on_ground"]
 
 
     # The last step put the model under start altitude, make this not possible
