@@ -14,6 +14,7 @@ import dynamic_models.engine    as engine
 import static_models.nose_cone  as nose_cone
 
 import math
+import time
 
 class Vehicle_State:
 
@@ -32,7 +33,15 @@ class Vehicle_State:
         self.time_stamp     = time_stamp
         self.phase          = Vehicle_State.Flight_phases["on_ground"]
 
+def validate_sim_time(start_time):
+    if(time.time() > (start_time + 1)):
+        return False
+    return True
+
 def perform_flight(motor_model, rocket_diameter_in, rocket_mass, drogue_size, main_size, start_altitude, delta_t_s):
+
+    # Only give the sim a little bit of time to run
+    sim_start_time      = time.time()
 
     flight_model        = []
 
@@ -41,12 +50,15 @@ def perform_flight(motor_model, rocket_diameter_in, rocket_mass, drogue_size, ma
         return flight_model
     elif(rocket_mass == 0):
         return flight_model
+    elif(delta_t_s == 0):
+        return flight_model
 
     current_timestep    = 0
 
     # Add in first Vehicle State
     flight_model.append(Vehicle_State(current_timestep))
-    flight_model[-1].altitude = start_altitude
+    start_altitude /= 3.28084
+    flight_model[-1].altitude = start_altitude 
 
     # Estimate vehicle coefficient of drag
     rocket_diameter_m   = rocket_diameter_in * 0.0254
@@ -58,10 +70,14 @@ def perform_flight(motor_model, rocket_diameter_in, rocket_mass, drogue_size, ma
     drogue_area         = (drogue_diameter_m / 2.0 ) * (drogue_diameter_m / 2.0 ) * math.pi
     main_area           = (main_diameter_m / 2.0 ) * (main_diameter_m / 2.0 ) * math.pi
 
-    # print "Rocket Area %f" % surface_area
+    # print("Rocket Area %f" % surface_area)
 
     # Perform the boost phase simulation
     while(current_timestep <= motor_model.burn_time_s):
+
+        if(not(validate_sim_time(sim_start_time))):
+            return None
+
         #Progress to new timestamp
         current_timestep += delta_t_s
 
@@ -82,7 +98,7 @@ def perform_flight(motor_model, rocket_diameter_in, rocket_mass, drogue_size, ma
         net_velocity        = flight_model[-1].velocity + (net_acceleration * delta_t_s)
         net_altitude        = flight_model[-1].altitude + (net_velocity * delta_t_s)
 
-        # print "Force: %9.3f\tAcceleration: %9.3f\tVelocity %9.3f\tAltitude %9.3f" % (net_force,net_acceleration, net_velocity, net_altitude)
+        # print("Force: %9.3f\tAcceleration: %9.3f\tVelocity %9.3f\tAltitude %9.3f" % (net_force,net_acceleration, net_velocity, net_altitude))
 
         # Make a new state
         flight_model.append(Vehicle_State(current_timestep))
@@ -91,10 +107,14 @@ def perform_flight(motor_model, rocket_diameter_in, rocket_mass, drogue_size, ma
         flight_model[-1].altitude       = net_altitude
         flight_model[-1].phase          = Vehicle_State.Flight_phases["powered_boost"]
 
-    # print "Boost Complete"
+    # print("Boost Complete")
 
     # Perform coast phase simulation
     while(flight_model[-1].velocity >= 0):
+
+        if(not(validate_sim_time(sim_start_time))):
+            return None
+
         #Progress to new timestamp
         current_timestep += delta_t_s
 
@@ -121,14 +141,18 @@ def perform_flight(motor_model, rocket_diameter_in, rocket_mass, drogue_size, ma
         flight_model[-1].velocity       = net_velocity
         flight_model[-1].altitude       = net_altitude
         flight_model[-1].phase          = Vehicle_State.Flight_phases["coast"]
-        # print "Acceleration: %9.3f\tVelocity %9.3f\tAltitude %9.3f" % (net_acceleration, net_velocity, net_altitude)
+        # print("Acceleration: %9.3f\tVelocity %9.3f\tAltitude %9.3f" % (net_acceleration, net_velocity, net_altitude))
 
 
 
-    # print "Coast Complete"
+    # print("Coast Complete")
 
     # Perform drogue phase descent
-    while(flight_model[-1].altitude < 228.6):
+    while(flight_model[-1].altitude > (228.6+start_altitude)):
+
+        if(not(validate_sim_time(sim_start_time))):
+            return None
+
         #Progress to new timestamp
         current_timestep += delta_t_s
 
@@ -155,14 +179,18 @@ def perform_flight(motor_model, rocket_diameter_in, rocket_mass, drogue_size, ma
         flight_model[-1].velocity       = net_velocity
         flight_model[-1].altitude       = net_altitude
         flight_model[-1].phase          = Vehicle_State.Flight_phases["drogue_descent"]
-        # print "Acceleration: %9.3f\tVelocity %9.3f\tAltitude %9.3f" % (net_acceleration, net_velocity, net_altitude)
+        # print("Acceleration: %9.3f\tVelocity %9.3f\tAltitude %9.3f" % (net_acceleration, net_velocity, net_altitude))
 
 
 
-    # print "Drogue Complete"
+    # print("Drogue Complete")
 
     # Perform main chute phase descent
     while(flight_model[-1].altitude >= start_altitude):
+
+        if(not(validate_sim_time(sim_start_time))):
+            return None
+
         #Progress to new timestamp
         current_timestep += delta_t_s
 
@@ -176,8 +204,8 @@ def perform_flight(motor_model, rocket_diameter_in, rocket_mass, drogue_size, ma
         net_force  += drag.calculate_drag_force(0.8,
                                                 flight_model[-1].velocity,
                                                 flight_model[-1].altitude,
-                                                drogue_area) + \
-                      drag.calculate_drag_force(0.8,
+                                                drogue_area)
+        net_force  += drag.calculate_drag_force(0.8,
                                                 flight_model[-1].velocity,
                                                 flight_model[-1].altitude,
                                                 main_area)
@@ -192,7 +220,7 @@ def perform_flight(motor_model, rocket_diameter_in, rocket_mass, drogue_size, ma
         flight_model[-1].velocity       = net_velocity
         flight_model[-1].altitude       = net_altitude
         flight_model[-1].phase          = Vehicle_State.Flight_phases["main_descent"]
-        # print "Acceleration: %9.3f\tVelocity %9.3f\tAltitude %9.3f" % (net_acceleration, net_velocity, net_altitude)
+        # print("Acceleration: %9.3f\tVelocity %9.3f\tAltitude %9.3f" % (net_acceleration, net_velocity, net_altitude))
 
 
 
@@ -202,6 +230,20 @@ def perform_flight(motor_model, rocket_diameter_in, rocket_mass, drogue_size, ma
     flight_model[-1].acceleration   = 0
     flight_model[-1].phase          = Vehicle_State.Flight_phases["on_ground"]
 
-    # print "Flight Complete"
+    # print("Flight Complete")
 
     return flight_model
+
+if __name__ == '__main__':
+    motor_model = engine.Rocket_Motor(270, 2.6)
+    with open("test.csv",'w') as fh:
+        sim = perform_flight( motor_model,
+                             3.0,
+                             1.5,
+                             15,
+                             48,
+                             8801,
+                             0.1
+                             )
+        for entry in sim:
+            fh.write("%9.6f,%9.6f,%9.6f,%9.6f,%d\n" % (entry.altitude, entry.velocity, entry.acceleration, entry.time_stamp, entry.phase))
