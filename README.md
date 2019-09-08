@@ -25,4 +25,4 @@ Use Python 3 to call flight_designer.py
 * Adjustable main deployment altitude
 * Design Constraints Engine
   * Minimum off-the-rail velocity
-  * 
+  * Maximum Total Impulse
