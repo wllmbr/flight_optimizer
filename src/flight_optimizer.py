@@ -14,9 +14,9 @@ import sys
 
 # Surpress STDOUT
 
-dev_null = io.StringIO()
-sys.stdout = dev_null
-sys.stderr = dev_null
+# dev_null = io.StringIO()
+# sys.stdout = dev_null
+# sys.stderr = dev_null
 
 app = QtGui.QApplication([])
 
@@ -56,21 +56,85 @@ die = False
 global input_list
 input_list = []
 
+
+global sim
+sim = []
+
+def update_screen():
+    global p1
+    global apogee_value
+    global warning_label
+    global input_list
+    global sim
+
+    # Process everything in input_list
+    for entry in input_list:
+        entry.process()
+
+    if(sim == None):
+        warning_label.setText("Sim is taking too long")
+        # Sim took too long
+    else:
+        warning_label.setText("")
+
+        apogee = 0
+        # Clear 
+        plot.getPlotItem().clear()
+        x_vals = []
+        a_vals = []
+        v_vals = []
+        y_vals = []
+
+        for entry in sim:
+
+            #Convert altitude
+            alt = entry.altitude * 3.28084
+            alt -= input_list[6].cur_val
+
+            #Find Apogee
+            if alt > apogee:
+                apogee = alt
+            # Add point to plot
+            x_vals.append(entry.time_stamp)
+            y_vals.append(alt)
+            a_vals.append(entry.acceleration)
+            v_vals.append(entry.velocity)
+
+        #Make a PlotDataItem and add it to the graph
+        pdi_altitude = pg.PlotDataItem(x_vals, y_vals)
+        pen_altitude = pg.mkPen('b')
+        pdi_altitude.setPen(pen_altitude)
+
+        pdi_accel       = pg.PlotDataItem(x_vals, a_vals)
+        pen_accel       = pg.mkPen('r')
+        pdi_accel.setPen(pen_accel)
+
+        pdi_vel       = pg.PlotDataItem(x_vals, v_vals)
+        pen_vel       = pg.mkPen('g')
+        pdi_vel.setPen(pen_vel)
+
+        p1.clear()
+        p1.addItem(pdi_altitude)
+        p1.addItem(pdi_accel)
+        p1.addItem(pdi_vel)
+
+        apogee_value.setText("%4.3f" % apogee)
+
 row_index = 0
 
-input_list.append(data_input.Variable_Widget(layout, row_index, plot_cols, "Thrust",            "N",    160,    2560))
+input_list.append(data_input.Variable_Widget(layout, row_index, plot_cols, "Thrust",            "N",    160,    2560,   update_screen))
 row_index += 2
-input_list.append(data_input.Variable_Widget(layout, row_index, plot_cols, "Burn Time",         "S",    0.5,    10))
+input_list.append(data_input.Variable_Widget(layout, row_index, plot_cols, "Burn Time",         "S",    0.5,    10,     update_screen))
 row_index += 2
-input_list.append(data_input.Variable_Widget(layout, row_index, plot_cols, "Vehicle Diameter",  "in",   0.7,    6))
+input_list.append(data_input.Variable_Widget(layout, row_index, plot_cols, "Vehicle Diameter",  "in",   0.7,    6,      update_screen))
 row_index += 2
-input_list.append(data_input.Variable_Widget(layout, row_index, plot_cols, "Vehicle Mass",      "kg",   0.25,    20))
+input_list.append(data_input.Variable_Widget(layout, row_index, plot_cols, "Vehicle Mass",      "kg",   0.25,   20,     update_screen))
 row_index += 2
-input_list.append(data_input.Variable_Widget(layout, row_index, plot_cols, "Drogue Size",       "in",   12,     16))
+input_list.append(data_input.Variable_Widget(layout, row_index, plot_cols, "Drogue Size",       "in",   12,     16,     update_screen))
 row_index += 2
-input_list.append(data_input.Variable_Widget(layout, row_index, plot_cols, "Main Size",         "in",   0,     49))
+input_list.append(data_input.Variable_Widget(layout, row_index, plot_cols, "Main Size",         "in",   0,      49,     update_screen))
 row_index += 2
-input_list.append(data_input.Variable_Widget(layout, row_index, plot_cols, "Launch Altitude",   "ft",   0,   8868))
+input_list.append(data_input.Variable_Widget(layout, row_index, plot_cols, "Launch Altitude",   "ft",   0,      8868,   update_screen))
 row_index += 2
 
 input_list[0].set_val(270)
@@ -81,26 +145,22 @@ input_list[4].set_val(18)
 input_list[5].set_val(48)
 input_list[6].set_val(8864)
 
-
 #Force column relative layout
 for i in range(0,plot_cols + 5):
     layout.setColumnStretch(i,1)
 
-def display_slider(il):
+
+def execute_simulation(il):
     global die
-    global p1
-    global apogee_value
-    global warning_label
+    global sim
     last_time = time.time()
 
-    sim = []
-
     while(not(die)):
+        # continue
         time.sleep(0.2)
         # Process all of the widgets
         should_process = False
         for w in il:
-            w.process()
             # Assume that we don't need to process but if anyone changed we do
             if(w.updated == True):
                 should_process = True
@@ -119,59 +179,9 @@ def display_slider(il):
                                                 input_list[6].cur_val,
                                                 0.01
                                         )
-
-            if(sim == None):
-                warning_label.setText("Sim is taking too long")
-                # Sim took too long
-                continue
-            else:
-                warning_label.setText("")
-            
-                apogee = 0
-                # Clear 
-                plot.getPlotItem().clear()
-                x_vals = []
-                a_vals = []
-                v_vals = []
-                y_vals = []
-
-                for entry in sim:
-
-                    #Convert altitude
-                    alt = entry.altitude * 3.28084
-                    alt -= input_list[6].cur_val
-
-                    #Find Apogee
-                    if alt > apogee:
-                        apogee = alt
-                    # Add point to plot
-                    x_vals.append(entry.time_stamp)
-                    y_vals.append(alt)
-                    a_vals.append(entry.acceleration)
-                    v_vals.append(entry.velocity)
-
-                #Make a PlotDataItem and add it to the graph
-                pdi_altitude = pg.PlotDataItem(x_vals, y_vals)
-                pen_altitude = pg.mkPen('b')
-                pdi_altitude.setPen(pen_altitude)
-
-                pdi_accel       = pg.PlotDataItem(x_vals, a_vals)
-                pen_accel       = pg.mkPen('r')
-                pdi_accel.setPen(pen_accel)
-
-                pdi_vel       = pg.PlotDataItem(x_vals, v_vals)
-                pen_vel       = pg.mkPen('g')
-                pdi_vel.setPen(pen_vel)
-
-                p1.clear()
-                p1.addItem(pdi_altitude)
-                p1.addItem(pdi_accel)
-                p1.addItem(pdi_vel)
-
-                apogee_value.setText(str(apogee))
     
 
-thr = threading.Thread(target=display_slider, args=(input_list,))
+thr = threading.Thread(target=execute_simulation, args=(input_list,))
 thr.start()
 
 window.setLayout(layout)

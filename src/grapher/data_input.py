@@ -4,7 +4,7 @@ from PyQt5.QtWidgets import (QSlider, QLabel, QLineEdit)
 import pyqtgraph as pg
 
 class Variable_Widget:
-    def __init__(self, layout, start_row, start_col, name, unit, min, max):
+    def __init__(self, layout, start_row, start_col, name, unit, min, max, callback):
         self.start_col  = start_col
         self.start_row  = start_row
         self.name       = name
@@ -18,6 +18,10 @@ class Variable_Widget:
         self.max_w      = QLineEdit()
         self.cur_val    = 0
         self.updated    = True
+
+        self.slider_w.valueChanged.connect(callback)
+        self.min_w.editingFinished.connect(callback)
+        self.max_w.editingFinished.connect(callback)
 
         # Setup widgets
         self.name_w.setText(str(name))
@@ -63,7 +67,7 @@ class Variable_Widget:
         self.slider_w.setValue(int(mp * self.tick_range))
 
     def process(self):
-        # Update values from min/max
+        # # Update values from min/max
         try:
             self.min_val = float(self.min_w.text())
         except:

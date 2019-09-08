@@ -11,3 +11,18 @@ Use Python 3 to call flight_designer.py
 * numpy
 * pyqt5
 
+## Future Work
+
+* Automatic dependancy installer
+* Display more flight data
+  * Max acceleration
+  * Flight Time
+  * Drogue Descent Rate
+  * Main + Drogue Descent Rate
+* Flight Events
+* Direct value editing
+* Per-value units selector
+* Adjustable main deployment altitude
+* Design Constraints Engine
+  * Minimum off-the-rail velocity
+  * 
