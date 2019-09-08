@@ -188,6 +188,9 @@ window.setLayout(layout)
 ## Display the widget as a new window
 window.show()
 
+# Run the sim & update the screen
+update_screen()
+
 ## Start the Qt event loop
 app.exec_()
 # Shutting down
